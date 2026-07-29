@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ANIKA LIBRARY</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#101216;color:#f3f4f6}
+header{padding:18px 16px;background:#171a20;position:sticky;top:0;z-index:5;border-bottom:1px solid #2a2e37}
+h1{margin:0;font-size:23px}.sub{color:#9ca3af;font-size:13px;margin-top:3px}
+.wrap{max-width:1100px;margin:auto;padding:16px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.card{background:#191c22;border:1px solid #2b303a;border-radius:15px;padding:14px}.num{font-size:25px;font-weight:700}.muted{color:#9ca3af;font-size:13px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}.btn{border:0;border-radius:11px;padding:11px 15px;background:#19a974;color:white;font-weight:700}.btn.secondary{background:#292e38}.btn.danger{background:#a33a3a}
+input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #343a46;background:#0e1014;color:#fff;font-size:15px}label{display:block;margin:10px 0 5px;color:#cbd0d8;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.full{grid-column:1/-1}
+.seats{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}.seat{padding:10px 5px;text-align:center;border-radius:10px;border:1px solid #39404c;background:#20242c;cursor:pointer}.seat.free{background:#153b2d}.seat.busy{background:#48252a}.seat small{display:block;color:#aeb4bf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list{display:grid;gap:10px;margin-top:14px}.student{display:grid;grid-template-columns:60px 1fr auto;gap:12px;align-items:center;background:#191c22;border:1px solid #2b303a;border-radius:14px;padding:10px}.photo{width:60px;height:60px;border-radius:12px;object-fit:cover;background:#2a2e37}.student h3{margin:0 0 3px;font-size:16px}.student p{margin:2px 0;color:#aeb4bf;font-size:12px}.mini{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.mini button{border:0;border-radius:8px;padding:7px 9px;background:#292e38;color:#fff}.mini .call{background:#176b46}
+.modal{position:fixed;inset:0;background:#000b;display:none;align-items:flex-end;z-index:10}.modal.show{display:flex}.sheet{background:#171a20;width:100%;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px}.topline{display:flex;justify-content:space-between;align-items:center}.x{background:#292e38;color:#fff;border:0;border-radius:9px;padding:8px 12px}.hint{background:#20242c;color:#c7ccd4;padding:10px;border-radius:10px;font-size:12px;margin-top:10px}
+@media(min-width:700px){.modal{align-items:center;justify-content:center}.sheet{width:min(720px,94vw);border-radius:18px}.seats{grid-template-columns:repeat(11,1fr)}}
+@media(max-width:520px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.stats{grid-template-columns:repeat(3,1fr)}.num{font-size:20px}.student{grid-template-columns:52px 1fr}.student>div:last-child{grid-column:2}.photo{width:52px;height:52px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>📚 ANIKA LIBRARY</h1><div class="sub">Student & Seat Management</div></div></header>
+<main class="wrap">
+<div class="stats">
+ <div class="card"><div class="num" id="total">0</div><div class="muted">Students</div></div>
+ <div class="card"><div class="num" id="occupied">0</div><div class="muted">Seats Used</div></div>
+ <div class="card"><div class="num">44</div><div class="muted">Total Seats</div></div>
+</div>
+<div class="actions"><button class="btn" onclick="openForm()">＋ Add Student</button><button class="btn secondary" onclick="loadStudents()">↻ Refresh</button></div>
+<input id="search" placeholder="Student name / seat / phone search..." oninput="render()">
+<div class="card" style="margin-top:12px"><b>Seats</b><div id="seats" class="seats"></div></div>
+<div id="list" class="list"></div>
+</main>
+
+<div id="modal" class="modal"><div class="sheet">
+<div class="topline"><h2 id="formTitle">Add Student</h2><button class="x" onclick="closeForm()">✕</button></div>
+<form id="form" onsubmit="saveStudent(event)">
+<input type="hidden" id="sid">
+<label>Seat No. *</label><select id="seat" required></select>
+<label>Student Name *</label><input id="name" required>
+<label>Father Name</label><input id="father_name">
+<div class="grid">
+<div><label>Student Phone</label><input id="phone" inputmode="numeric"></div>
+<div><label>Father Phone</label><input id="father_phone" inputmode="numeric"></div>
+<div><label>Monthly Fee (₹)</label><input id="monthly_fee" type="number" value="500"></div>
+<div><label>Join Date</label><input id="join_date" type="date"></div>
+</div>
+<label>Student Photo</label><input id="photoFile" type="file" accept="image/*">
+<div class="hint">Photo upload ke liye Supabase Storage me <b>student-photos</b> bucket aur policies setup.sql se ek baar bana dena.</div>
+<label>Active</label><select id="active"><option value="true">Yes</option><option value="false">No</option></select>
+<div class="actions"><button class="btn" type="submit">Save Student</button><button class="btn secondary" type="button" onclick="closeForm()">Cancel</button></div>
+</form>
+</div></div>
+
+<script>
+const SUPABASE_URL="https://qiorcljyepisubqekbok.supabase.co";
+const SUPABASE_KEY="sb_publishable_W3yd5DTQCDb4bOr8yE4kHg_87hGYa5i";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let students=[];
+
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function tel(n){return n?`tel:${String(n).replace(/\D/g,"")}`:"#"}
+function openForm(s=null){
+ document.getElementById("modal").classList.add("show");
+ document.getElementById("formTitle").textContent=s?"Edit Student":"Add Student";
+ document.getElementById("sid").value=s?.id||"";
+ document.getElementById("name").value=s?.name||"";
+ document.getElementById("father_name").value=s?.father_name||"";
+ document.getElementById("phone").value=s?.phone||"";
+ document.getElementById("father_phone").value=s?.father_phone||"";
+ document.getElementById("monthly_fee").value=s?.monthly_fee??500;
+ document.getElementById("join_date").value=s?.join_date||new Date().toISOString().slice(0,10);
+ document.getElementById("active").value=String(s?.active??true);
+ const sel=document.getElementById("seat");sel.innerHTML="";
+ for(let i=1;i<=44;i++) sel.innerHTML+=`<option value="${i}">${i}</option>`;
+ sel.value=s?.seat_no||"";
+}
+function closeForm(){document.getElementById("modal").classList.remove("show")}
+async function loadStudents(){
+ const {data,error}=await db.from("students").select("*").order("seat_no",{ascending:true});
+ if(error){alert("Students load nahi hue: "+error.message);return}
+ students=data||[];render();
+}
+async function saveStudent(e){
+ e.preventDefault();
+ const id=document.getElementById("sid").value;
+ const payload={
+  seat_no:Number(document.getElementById("seat").value),name:document.getElementById("name").value.trim(),
+  father_name:document.getElementById("father_name").value.trim()||null,phone:document.getElementById("phone").value.trim()||null,
+  father_phone:document.getElementById("father_phone").value.trim()||null,monthly_fee:Number(document.getElementById("monthly_fee").value||0),
+  join_date:document.getElementById("join_date").value||null,active:document.getElementById("active").value==="true"
+ };
+ let photoUrl=null;
+ const file=document.getElementById("photoFile").files[0];
+ if(file){
+   const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
+   const path=`${crypto.randomUUID()}.${ext}`;
+   const up=await db.storage.from("student-photos").upload(path,file,{upsert:false,contentType:file.type});
+   if(up.error){alert("Photo upload error: "+up.error.message+"\nPehle setup.sql apply karein.");return}
+   photoUrl=db.storage.from("student-photos").getPublicUrl(path).data.publicUrl;
+   payload.photo=photoUrl;
+ }
+ let res=id?await db.from("students").update(payload).eq("id",id):await db.from("students").insert(payload);
+ if(res.error){alert("Save error: "+res.error.message);return}
+ closeForm();document.getElementById("form").reset();await loadStudents();
+}
+async function removeStudent(id){
+ if(!confirm("Is student ko delete karna hai?"))return;
+ const {error}=await db.from("students").delete().eq("id",id);
+ if(error) alert(error.message); else loadStudents();
+}
+function render(){
+ const q=document.getElementById("search").value.toLowerCase();
+ const filtered=students.filter(s=>[s.name,s.phone,s.father_phone,s.seat_no].some(x=>String(x??"").toLowerCase().includes(q)));
+ document.getElementById("total").textContent=students.length;
+ document.getElementById("occupied").textContent=students.filter(s=>s.active!==false).length;
+ const seats=document.getElementById("seats");seats.innerHTML="";
+ for(let i=1;i<=44;i++){
+  const s=students.find(x=>Number(x.seat_no)===i && x.active!==false);
+  seats.innerHTML+=`<div class="seat ${s?"busy":"free"}" onclick='${s?`openForm(${JSON.stringify(s).replace(/'/g,"&#39;")})`:"openForm()"}'>${i}<small>${s?esc(s.name):"Free"}</small></div>`;
+ }
+ document.getElementById("list").innerHTML=filtered.map(s=>`
+ <div class="student">
+  <img class="photo" src="${esc(s.photo||"")}" onerror="this.style.visibility='hidden'" alt="">
+  <div><h3>${esc(s.name)} <span class="muted">#${esc(s.seat_no)}</span></h3>
+   <p>Father: ${esc(s.father_name||"-")} · Fee: ₹${esc(s.monthly_fee??0)}</p>
+   <p>${esc(s.phone||"")} ${s.active===false?"· Inactive":""}</p>
+   <div class="mini">
+    ${s.phone?`<button class="call" onclick="location.href='${tel(s.phone)}'">📞 Student</button>`:""}
+    ${s.father_phone?`<button class="call" onclick="location.href='${tel(s.father_phone)}'">📞 Father</button>`:""}
+    <button onclick='openForm(${JSON.stringify(s).replace(/'/g,"&#39;")})'>✏️ Edit</button>
+    <button onclick="removeStudent('${esc(s.id)}')">🗑️</button>
+   </div>
+  </div>
+ </div>`).join("") || `<div class="card muted">No students found.</div>`;
+}
+loadStudents();
+</script>
+</body>
+</html>
